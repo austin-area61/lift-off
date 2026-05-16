@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LiftOff</title>
+  </head>
+  <body style="margin: 0; background: #0c0c0f">
+    <h2 class="sr-only">
+      LiftOff crash game simulator with provably fair crypto RNG. Rounds run
+      automatically with 5 seconds between each.
+    </h2>
+
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;700&display=swap");
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      #app {
+        font-family: "Syne", sans-serif;
+        background: #0c0c0f;
+        color: #e8e4dc;
+        min-height: 540px;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      #setup-screen {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 540px;
+        gap: 1.5rem;
+        padding: 2rem;
+        text-align: center;
+      }
+      #setup-screen h1 {
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+      }
+      #setup-screen p {
+        font-size: 13px;
+        color: #4a4a52;
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      #balance-input-wrap {
+        display: flex;
+        align-items: center;
+        border: 1px solid #2a2a30;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #13131a;
+      }
+      #balance-input-wrap span {
+        padding: 0 14px;
+        font-size: 16px;
+        color: #4a4a52;
+        font-family: "JetBrains Mono", monospace;
+        line-height: 52px;
+      }
+      #start-balance {
+        border: none;
+        background: #13131a;
+        color: #e8e4dc;
+        font-size: 20px;
+        font-family: "JetBrains Mono", monospace;
+        font-weight: 700;
+        padding: 14px 16px 14px 0;
+        outline: none;
+        width: 160px;
+      }
+      #start-btn {
+        background: #e8e4dc;
+        color: #0c0c0f;
+        border: none;
+        padding: 14px 36px;
+        font-size: 15px;
+        font-weight: 700;
+        font-family: "Syne", sans-serif;
+        border-radius: 8px;
+        cursor: pointer;
+        letter-spacing: 0.5px;
+      }
+      #start-btn:hover {
+        opacity: 0.85;
+      }
+
+      #game-screen {
+        display: none;
+        flex-direction: column;
+      }
+
+      #top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 18px;
+        border-bottom: 1px solid #1a1a20;
+      }
+      .bar-stat {
+        text-align: center;
+      }
+      .bar-stat-label {
+        font-size: 9px;
+        color: #3a3a42;
+        letter-spacing: 1.5px;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .bar-stat-value {
+        font-size: 14px;
+        font-weight: 700;
+        font-family: "JetBrains Mono", monospace;
+        color: #e8e4dc;
+        margin-top: 1px;
+      }
+      .bar-stat-value.profit {
+        color: #4ade80;
+      }
+      .bar-stat-value.loss {
+        color: #f87171;
+      }
+
+      #seed-bar {
+        padding: 5px 18px;
+        border-bottom: 1px solid #1a1a20;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #seed-label {
+        font-size: 9px;
+        color: #2e2e3a;
+        font-family: "JetBrains Mono", monospace;
+        letter-spacing: 1px;
+        flex-shrink: 0;
+      }
+      #seed-value {
+        font-size: 9px;
+        color: #2e2e3a;
+        font-family: "JetBrains Mono", monospace;
+        letter-spacing: 0.5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #canvas-wrap {
+        position: relative;
+        height: 190px;
+        background: #0c0c0f;
+      }
+      canvas#graph {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      #mult-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+      #multiplier-text {
+        font-size: 56px;
+        font-weight: 700;
+        font-family: "JetBrains Mono", monospace;
+        letter-spacing: -2px;
+        color: #e8e4dc;
+      }
+      #multiplier-text.crashed {
+        color: #f87171;
+      }
+      #multiplier-text.cashed {
+        color: #4ade80;
+      }
+      #round-label {
+        font-size: 10px;
+        color: #3a3a42;
+        font-family: "JetBrains Mono", monospace;
+        letter-spacing: 1.5px;
+        margin-top: 2px;
+      }
+
+      #explode-overlay {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: 68px;
+        pointer-events: none;
+      }
+      @keyframes popIn {
+        0% {
+          transform: scale(0.2);
+          opacity: 0;
+        }
+        45% {
+          transform: scale(1.35);
+          opacity: 1;
+        }
+        70% {
+          transform: scale(0.92);
+        }
+        100% {
+          transform: scale(1.05);
+          opacity: 1;
+        }
+      }
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        20% {
+          transform: translateX(-5px);
+        }
+        40% {
+          transform: translateX(5px);
+        }
+        60% {
+          transform: translateX(-3px);
+        }
+        80% {
+          transform: translateX(3px);
+        }
+      }
+
+      #countdown-bar {
+        height: 2px;
+        background: #1a1a20;
+      }
+      #countdown-fill {
+        height: 100%;
+        background: #2e2e40;
+        width: 100%;
+        transition: width 0.08s linear;
+      }
+
+      #history-strip {
+        display: flex;
+        gap: 5px;
+        padding: 7px 18px;
+        overflow: hidden;
+        height: 32px;
+        align-items: center;
+        border-top: 1px solid #1a1a20;
+        border-bottom: 1px solid #1a1a20;
+      }
+      .hist-pill {
+        font-size: 10px;
+        font-family: "JetBrains Mono", monospace;
+        padding: 2px 7px;
+        border-radius: 4px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .hist-pill.high {
+        color: #4ade80;
+        background: #0d1f18;
+      }
+      .hist-pill.mid {
+        color: #facc15;
+        background: #1a1708;
+      }
+      .hist-pill.low {
+        color: #f87171;
+        background: #1a0d0d;
+      }
+
+      #controls {
+        padding: 12px 18px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .ctrl-card {
+        background: #13131a;
+        border: 1px solid #1e1e28;
+        border-radius: 8px;
+        padding: 11px 12px;
+      }
+      .ctrl-label {
+        font-size: 9px;
+        color: #3a3a42;
+        letter-spacing: 1.5px;
+        font-family: "JetBrains Mono", monospace;
+        margin-bottom: 7px;
+      }
+      .bet-row {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+      }
+      .bet-input {
+        flex: 1;
+        background: #0c0c0f;
+        border: 1px solid #222230;
+        border-radius: 5px;
+        color: #e8e4dc;
+        font-size: 15px;
+        font-family: "JetBrains Mono", monospace;
+        font-weight: 700;
+        padding: 6px 8px;
+        outline: none;
+        min-width: 0;
+      }
+      .quick-btn {
+        background: #1a1a24;
+        border: 1px solid #222230;
+        border-radius: 5px;
+        color: #555560;
+        font-size: 10px;
+        font-family: "JetBrains Mono", monospace;
+        padding: 6px 5px;
+        cursor: pointer;
+        line-height: 1;
+      }
+      .quick-btn:hover {
+        background: #242430;
+        color: #e8e4dc;
+      }
+
+      .auto-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .toggle {
+        position: relative;
+        width: 30px;
+        height: 17px;
+        flex-shrink: 0;
+      }
+      .toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .toggle-slider {
+        position: absolute;
+        inset: 0;
+        background: #1a1a24;
+        border-radius: 9px;
+        cursor: pointer;
+        border: 1px solid #222230;
+        transition: background 0.2s;
+      }
+      .toggle-slider::before {
+        content: "";
+        position: absolute;
+        width: 11px;
+        height: 11px;
+        left: 2px;
+        top: 2px;
+        background: #444450;
+        border-radius: 50%;
+        transition:
+          transform 0.2s,
+          background 0.2s;
+      }
+      .toggle input:checked + .toggle-slider {
+        background: #0f2018;
+        border-color: #1e4030;
+      }
+      .toggle input:checked + .toggle-slider::before {
+        transform: translateX(13px);
+        background: #4ade80;
+      }
+
+      #auto-target {
+        width: 54px;
+        background: #0c0c0f;
+        border: 1px solid #222230;
+        border-radius: 5px;
+        color: #e8e4dc;
+        font-size: 12px;
+        font-family: "JetBrains Mono", monospace;
+        padding: 4px 6px;
+        outline: none;
+      }
+      #auto-target:disabled {
+        opacity: 0.25;
+      }
+      .auto-label {
+        font-size: 10px;
+        color: #3a3a42;
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      #action-btn {
+        grid-column: 1 / -1;
+        border: none;
+        border-radius: 8px;
+        padding: 13px;
+        font-size: 14px;
+        font-weight: 700;
+        font-family: "Syne", sans-serif;
+        cursor: pointer;
+        letter-spacing: 0.5px;
+      }
+      #action-btn.bet-mode {
+        background: #e8e4dc;
+        color: #0c0c0f;
+      }
+      #action-btn.cashout-mode {
+        background: #4ade80;
+        color: #061a0f;
+      }
+      #action-btn.wait-mode {
+        background: #16161e;
+        color: #333340;
+        cursor: not-allowed;
+      }
+      #action-btn.cashed-mode {
+        background: #0f2018;
+        color: #4ade80;
+        cursor: not-allowed;
+      }
+
+      #log-strip {
+        padding: 0 18px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-height: 64px;
+        overflow: hidden;
+      }
+      .log-entry {
+        font-size: 10px;
+        font-family: "JetBrains Mono", monospace;
+        color: #2e2e3a;
+        padding: 1px 0;
+      }
+      .log-entry.win {
+        color: #4ade80;
+      }
+      .log-entry.loss {
+        color: #f87171;
+      }
+      .log-entry.system {
+        color: #333340;
+      }
+
+      #bust-overlay {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 540px;
+        gap: 14px;
+        background: #0c0c0f;
+        text-align: center;
+        padding: 2rem;
+      }
+      #bust-overlay h2 {
+        font-size: 22px;
+        color: #f87171;
+        font-weight: 700;
+      }
+      #bust-overlay p {
+        font-size: 11px;
+        color: #3a3a42;
+        font-family: "JetBrains Mono", monospace;
+      }
+      #restart-btn {
+        background: #e8e4dc;
+        color: #0c0c0f;
+        border: none;
+        border-radius: 8px;
+        padding: 11px 26px;
+        font-size: 13px;
+        font-weight: 700;
+        font-family: "Syne", sans-serif;
+        cursor: pointer;
+        margin-top: 6px;
+      }
+    </style>
+
+    <div id="app">
+      <div id="setup-screen">
+        <div>
+          <div style="font-size: 40px; margin-bottom: 8px">🚀</div>
+          <h1>LIFTOFF</h1>
+          <p style="margin-top: 6px">practice simulator · no real money</p>
+        </div>
+        <div id="balance-input-wrap">
+          <span>KES</span>
+          <input type="number" id="start-balance" value="1000" min="1" />
+        </div>
+        <p>set your starting balance, then launch</p>
+        <button id="start-btn" onclick="startSession()">LAUNCH SESSION</button>
+      </div>
+
+      <div id="game-screen">
+        <div id="top-bar">
+          <div class="bar-stat">
+            <div class="bar-stat-label">BALANCE</div>
+            <div class="bar-stat-value" id="balance-display">—</div>
+          </div>
+          <div class="bar-stat">
+            <div class="bar-stat-label">SESSION P&L</div>
+            <div class="bar-stat-value" id="pnl-display">+0</div>
+          </div>
+          <div class="bar-stat">
+            <div class="bar-stat-label">ROUNDS</div>
+            <div class="bar-stat-value" id="rounds-display">0</div>
+          </div>
+        </div>
+
+        <div id="seed-bar">
+          <span id="seed-label">SEED</span>
+          <span id="seed-value">—</span>
+        </div>
+
+        <div id="canvas-wrap">
+          <canvas id="graph"></canvas>
+          <div id="mult-overlay">
+            <div id="multiplier-text">—</div>
+            <div id="round-label">NEXT LAUNCH IN 5s</div>
+          </div>
+          <div id="explode-overlay">💥</div>
+        </div>
+
+        <div id="countdown-bar"><div id="countdown-fill"></div></div>
+        <div id="history-strip"></div>
+
+        <div id="controls">
+          <div class="ctrl-card">
+            <div class="ctrl-label">STAKE</div>
+            <div class="bet-row">
+              <input
+                type="number"
+                class="bet-input"
+                id="bet-amount"
+                value="100"
+                min="1"
+              />
+              <button class="quick-btn" onclick="halfBet()">½</button>
+              <button class="quick-btn" onclick="doubleBet()">2×</button>
+              <button class="quick-btn" onclick="maxBet()">MAX</button>
+            </div>
+          </div>
+
+          <div class="ctrl-card">
+            <div class="ctrl-label">AUTO CASHOUT</div>
+            <div class="auto-row">
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  id="auto-toggle"
+                  onchange="toggleAuto()"
+                />
+                <span class="toggle-slider"></span>
+              </label>
+              <input
+                type="number"
+                id="auto-target"
+                value="2.00"
+                min="1.01"
+                step="0.1"
+                disabled
+              />
+              <span class="auto-label"
+                >× <span id="auto-status">off</span></span
+              >
+            </div>
+          </div>
+
+          <button id="action-btn" class="wait-mode" onclick="handleAction()">
+            WAITING…
+          </button>
+        </div>
+
+        <div id="log-strip"></div>
+      </div>
+
+      <div id="bust-overlay">
+        <div style="font-size: 44px">💥</div>
+        <h2>BUSTED</h2>
+        <p>your balance hit zero</p>
+        <p id="bust-stats" style="margin-top: 4px"></p>
+        <button id="restart-btn" onclick="restartSession()">NEW SESSION</button>
+      </div>
+    </div>
+
+    <script>
+      let balance = 0,
+        startBalance = 0,
+        rounds = 0;
+      let crashPoint = 1,
+        multiplier = 1;
+      let phase = "countdown";
+      let betPlaced = false,
+        betAmount = 0;
+      let cashedOut = false,
+        cashedAtMult = 0;
+      let animFrame = null,
+        flyStart = null;
+      let cdTimer = null,
+        cdStart = null;
+      let history = [],
+        graphPoints = [];
+
+      const COUNTDOWN = 5000;
+      const FLY_SPEED = 0.18;
+
+      // --- Provably fair RNG ---
+      // Uses crypto.getRandomValues() for OS-level entropy.
+      // Each round gets a fresh 16-byte hex seed that is shown in the UI,
+      // so anyone can verify the crash point was derived from that seed
+      // and not chosen after bets were placed.
+      function genCrashPoint() {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+
+        // display seed for transparency
+        const seed = Array.from(bytes)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+        document.getElementById("seed-value").textContent = seed;
+
+        // use first 4 bytes as a Uint32 to derive r in [0, 1)
+        const view = new DataView(bytes.buffer);
+        const uint32 = view.getUint32(0);
+        const r = uint32 / (0xffffffff + 1);
+
+        // 1% instant crash (house protection)
+        if (r < 0.01) return 1.0;
+
+        // exponential distribution with 4% house edge
+        return Math.max(1.0, Math.round((1 / (1 - r)) * 0.96 * 100) / 100);
+      }
+
+      function startSession() {
+        const val = parseFloat(document.getElementById("start-balance").value);
+        if (!val || val < 1) return;
+        balance = val;
+        startBalance = val;
+        rounds = 0;
+        document.getElementById("setup-screen").style.display = "none";
+        const gs = document.getElementById("game-screen");
+        gs.style.display = "flex";
+        gs.style.flexDirection = "column";
+        updateUI();
+        beginCountdown();
+      }
+
+      function restartSession() {
+        document.getElementById("bust-overlay").style.display = "none";
+        document.getElementById("setup-screen").style.display = "flex";
+        document.getElementById("game-screen").style.display = "none";
+        history = [];
+        graphPoints = [];
+        clearTimeout(cdTimer);
+        cancelAnimationFrame(animFrame);
+        document.getElementById("history-strip").innerHTML = "";
+        document.getElementById("log-strip").innerHTML = "";
+        document.getElementById("seed-value").textContent = "—";
+      }
+
+      function beginCountdown() {
+        phase = "countdown";
+        betPlaced = false;
+        cashedOut = false;
+        crashPoint = genCrashPoint(); // crypto seed generated here, shown in UI
+        multiplier = 1;
+        graphPoints = [];
+        hideExplode();
+        document.getElementById("mult-overlay").style.display = "";
+        setMultText("🚀", "");
+        setRoundLabel("NEXT LAUNCH IN 5s");
+        setBtn("bet-mode", "PLACE BET");
+        document.getElementById("bet-amount").disabled = false;
+        cdStart = performance.now();
+        drawGraph(false);
+        tickCountdown();
+      }
+
+      function tickCountdown() {
+        const elapsed = performance.now() - cdStart;
+        const remaining = Math.max(0, COUNTDOWN - elapsed);
+        document.getElementById("countdown-fill").style.width =
+          (remaining / COUNTDOWN) * 100 + "%";
+        setRoundLabel("NEXT LAUNCH IN " + Math.ceil(remaining / 1000) + "s");
+        if (remaining > 0) {
+          cdTimer = setTimeout(tickCountdown, 80);
+        } else {
+          document.getElementById("countdown-fill").style.width = "0%";
+          startFlight();
+        }
+      }
+
+      function handleAction() {
+        if (phase === "countdown") placeBet();
+        else if (phase === "flying" && betPlaced && !cashedOut) cashOut();
+      }
+
+      function placeBet() {
+        const amt = parseFloat(document.getElementById("bet-amount").value);
+        if (!amt || amt < 1) return;
+        if (amt > balance) {
+          addLog("insufficient balance", "system");
+          return;
+        }
+        betAmount = amt;
+        betPlaced = true;
+        balance -= betAmount;
+        updateUI();
+        document.getElementById("bet-amount").disabled = true;
+        setBtn("wait-mode", "BET PLACED ✓");
+        addLog("bet placed: KES " + fmt(betAmount), "system");
+      }
+
+      function startFlight() {
+        phase = "flying";
+        flyStart = performance.now();
+        multiplier = 1;
+        graphPoints = [];
+        setRoundLabel("CASH OUT BEFORE CRASH");
+        if (betPlaced && !cashedOut) setBtn("cashout-mode", "CASH OUT");
+        else setBtn("wait-mode", "WATCHING…");
+        animFrame = requestAnimationFrame(tick);
+      }
+
+      function tick(now) {
+        const elapsed = (now - flyStart) / 1000;
+        multiplier =
+          Math.round(Math.pow(Math.E, FLY_SPEED * elapsed) * 100) / 100;
+        graphPoints.push({ t: elapsed, m: multiplier });
+        setMultText(multiplier.toFixed(2) + "×", "");
+        drawGraph(false);
+
+        const autoOn = document.getElementById("auto-toggle").checked;
+        const autoTarget = parseFloat(
+          document.getElementById("auto-target").value,
+        );
+        if (autoOn && betPlaced && !cashedOut && multiplier >= autoTarget)
+          cashOut();
+
+        if (multiplier >= crashPoint) {
+          crash();
+          return;
+        }
+        animFrame = requestAnimationFrame(tick);
+      }
+
+      function cashOut() {
+        if (!betPlaced || cashedOut || phase !== "flying") return;
+        cashedOut = true;
+        cashedAtMult = multiplier;
+        const winnings = Math.round(betAmount * cashedAtMult * 100) / 100;
+        balance += winnings;
+        const profit = winnings - betAmount;
+        addLog(
+          "cashed " +
+            cashedAtMult.toFixed(2) +
+            "× · won KES " +
+            fmt(winnings) +
+            " (+" +
+            fmt(profit) +
+            ")",
+          "win",
+        );
+        updateUI();
+        setBtn("cashed-mode", "CASHED OUT " + cashedAtMult.toFixed(2) + "×");
+        setMultText(cashedAtMult.toFixed(2) + "×", "cashed");
+        setRoundLabel("CASHED OUT ✓");
+      }
+
+      function crash() {
+        cancelAnimationFrame(animFrame);
+        phase = "crashed";
+        rounds++;
+        const cp = crashPoint.toFixed(2);
+        drawGraph(true);
+        document.getElementById("mult-overlay").style.display = "none";
+        showExplode();
+
+        setTimeout(() => {
+          hideExplode();
+          document.getElementById("mult-overlay").style.display = "";
+          setMultText(cp + "×", "crashed");
+          setRoundLabel("CRASHED AT " + cp + "×");
+          addHistPill(parseFloat(cp));
+          if (betPlaced && !cashedOut)
+            addLog(
+              "lost KES " + fmt(betAmount) + " · crashed at " + cp + "×",
+              "loss",
+            );
+          else if (!betPlaced)
+            addLog("no bet · crashed at " + cp + "×", "system");
+          setBtn("wait-mode", "NEXT ROUND IN 5s…");
+          updateUI();
+          if (balance < 1) {
+            setTimeout(showBust, 800);
+            return;
+          }
+          setTimeout(beginCountdown, 5000);
+        }, 1200);
+      }
+
+      function showExplode() {
+        const el = document.getElementById("explode-overlay");
+        el.style.display = "flex";
+        el.style.animation = "none";
+        void el.offsetWidth;
+        el.style.animation = "popIn 0.4s ease forwards, shake 0.55s ease 0.35s";
+        const wrap = document.getElementById("canvas-wrap");
+        wrap.style.animation = "none";
+        void wrap.offsetWidth;
+        wrap.style.animation = "shake 0.45s ease";
+        setTimeout(() => {
+          wrap.style.animation = "none";
+        }, 500);
+      }
+
+      function hideExplode() {
+        const el = document.getElementById("explode-overlay");
+        el.style.display = "none";
+        el.style.animation = "none";
+      }
+
+      function drawGraph(crashed) {
+        const canvas = document.getElementById("graph");
+        const wrap = document.getElementById("canvas-wrap");
+        canvas.width = wrap.offsetWidth;
+        canvas.height = wrap.offsetHeight;
+        const ctx = canvas.getContext("2d");
+        const W = canvas.width,
+          H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+
+        const pad = { top: 16, right: 24, bottom: 28, left: 48 };
+        const hasPoints = graphPoints.length > 0;
+        const maxT = hasPoints
+          ? Math.max(graphPoints[graphPoints.length - 1].t, 2)
+          : 2;
+        const maxM = hasPoints
+          ? Math.max(graphPoints[graphPoints.length - 1].m, 2)
+          : 2;
+
+        function toXY(t, m) {
+          return {
+            x: pad.left + (t / maxT) * (W - pad.left - pad.right),
+            y:
+              H -
+              pad.bottom -
+              ((m - 1) / (maxM - 1 || 1)) * (H - pad.top - pad.bottom),
+          };
+        }
+
+        // axes
+        ctx.strokeStyle = "#1e1e28";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, pad.top);
+        ctx.lineTo(pad.left, H - pad.bottom);
+        ctx.lineTo(W - pad.right, H - pad.bottom);
+        ctx.stroke();
+
+        // grid lines
+        ctx.setLineDash([2, 5]);
+        for (let i = 1; i <= 3; i++) {
+          const m = 1 + i * ((maxM - 1) / 3);
+          const y =
+            H -
+            pad.bottom -
+            ((m - 1) / (maxM - 1 || 1)) * (H - pad.top - pad.bottom);
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(W - pad.right, y);
+          ctx.stroke();
+          ctx.fillStyle = "#2a2a38";
+          ctx.font = "9px JetBrains Mono, monospace";
+          ctx.textAlign = "right";
+          ctx.fillText(m.toFixed(1) + "×", pad.left - 4, y + 3);
+        }
+        ctx.setLineDash([]);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#2a2a38";
+        ctx.font = "9px JetBrains Mono, monospace";
+        ctx.fillText("1×", pad.left - 4, H - pad.bottom + 3);
+        ctx.textAlign = "left";
+
+        if (hasPoints) {
+          ctx.beginPath();
+          graphPoints.forEach((p, i) => {
+            const { x, y } = toXY(p.t, p.m);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+          });
+          ctx.strokeStyle = crashed ? "#f87171" : "#4ade80";
+          ctx.lineWidth = 2;
+          ctx.lineJoin = "round";
+          ctx.stroke();
+
+          if (!crashed) {
+            const last = graphPoints[graphPoints.length - 1];
+            const { x, y } = toXY(last.t, last.m);
+            ctx.font = "15px serif";
+            ctx.fillText("🚀", x - 4, y + 5);
+          }
+        } else {
+          const origin = toXY(0, 1);
+          ctx.font = "15px serif";
+          ctx.fillText("🚀", origin.x - 4, origin.y + 5);
+        }
+      }
+
+      function addHistPill(val) {
+        history.unshift(val);
+        if (history.length > 10) history.pop();
+        const strip = document.getElementById("history-strip");
+        strip.innerHTML = "";
+        history.forEach((v) => {
+          const p = document.createElement("span");
+          p.className =
+            "hist-pill " + (v >= 3 ? "high" : v >= 1.5 ? "mid" : "low");
+          p.textContent = v.toFixed(2) + "×";
+          strip.appendChild(p);
+        });
+      }
+
+      function addLog(msg, type) {
+        const log = document.getElementById("log-strip");
+        const el = document.createElement("div");
+        el.className = "log-entry " + type;
+        el.textContent = "› " + msg;
+        log.insertBefore(el, log.firstChild);
+        while (log.children.length > 4) log.removeChild(log.lastChild);
+      }
+
+      function setMultText(t, s) {
+        const e = document.getElementById("multiplier-text");
+        e.textContent = t;
+        e.className = s || "";
+      }
+      function setRoundLabel(t) {
+        document.getElementById("round-label").textContent = t;
+      }
+      function setBtn(cls, label) {
+        const b = document.getElementById("action-btn");
+        b.className = cls;
+        b.textContent = label;
+      }
+
+      function updateUI() {
+        document.getElementById("balance-display").textContent =
+          "KES " + fmt(balance);
+        const pnl = balance - startBalance;
+        const el = document.getElementById("pnl-display");
+        el.textContent = (pnl >= 0 ? "+" : "") + fmt(pnl);
+        el.className =
+          "bar-stat-value " + (pnl > 0 ? "profit" : pnl < 0 ? "loss" : "");
+        document.getElementById("rounds-display").textContent = rounds;
+      }
+
+      function fmt(n) {
+        return Math.round(n).toLocaleString();
+      }
+      function halfBet() {
+        const e = document.getElementById("bet-amount");
+        e.value = Math.max(1, Math.floor(parseFloat(e.value || 100) / 2));
+      }
+      function doubleBet() {
+        const e = document.getElementById("bet-amount");
+        e.value = Math.min(balance, Math.floor(parseFloat(e.value || 100) * 2));
+      }
+      function maxBet() {
+        document.getElementById("bet-amount").value = Math.floor(balance);
+      }
+      function toggleAuto() {
+        const on = document.getElementById("auto-toggle").checked;
+        document.getElementById("auto-target").disabled = !on;
+        document.getElementById("auto-status").textContent = on ? "on" : "off";
+      }
+
+      function showBust() {
+        document.getElementById("game-screen").style.display = "none";
+        document.getElementById("bust-overlay").style.display = "flex";
+        document.getElementById("bust-stats").textContent =
+          rounds + " rounds played · started KES " + fmt(startBalance);
+      }
+    </script>
+  </body>
+</html>
